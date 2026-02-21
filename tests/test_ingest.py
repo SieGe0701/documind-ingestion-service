@@ -3,32 +3,42 @@ import pytest
 from fastapi.testclient import TestClient
 
 
-def test_ingest_pdf_file_success(client: TestClient):
-    """Test successful PDF ingestion."""
+def test_ingest_pdf_file_success(client: TestClient, monkeypatch):
+    """Test successful PDF ingestion (parsers mocked)."""
     pdf_content = b"%PDF-1.4\n%Mock PDF content"
     file = ("test.pdf", io.BytesIO(pdf_content), "application/pdf")
+
+    # Mock loader to avoid real PDF parsing
+    def fake_load_pdf(b):
+        return "A" * len(b)
+
+    monkeypatch.setattr("app.api.ingest.load_pdf", fake_load_pdf)
 
     response = client.post("/ingest", files={"file": file})
 
     assert response.status_code == 200
     data = response.json()
     assert data["filename"] == "test.pdf"
-    assert data["content_type"] == "application/pdf"
-    assert data["size_bytes"] == len(pdf_content)
+    assert data["text_length"] == len(pdf_content)
 
 
-def test_ingest_txt_file_success(client: TestClient):
-    """Test successful TXT ingestion."""
+def test_ingest_txt_file_success(client: TestClient, monkeypatch):
+    """Test successful TXT ingestion (parsers mocked)."""
     txt_content = b"This is a sample text file content."
     file = ("test.txt", io.BytesIO(txt_content), "text/plain")
+
+    def fake_load_txt(b):
+        # simulate decoded and normalized text length
+        return "B" * len(b)
+
+    monkeypatch.setattr("app.api.ingest.load_txt", fake_load_txt)
 
     response = client.post("/ingest", files={"file": file})
 
     assert response.status_code == 200
     data = response.json()
     assert data["filename"] == "test.txt"
-    assert data["content_type"] == "text/plain"
-    assert data["size_bytes"] == len(txt_content)
+    assert data["text_length"] == len(txt_content)
 
 
 def test_ingest_unsupported_content_type_returns_400(client: TestClient):
@@ -59,19 +69,20 @@ def test_ingest_docx_unsupported_returns_400(client: TestClient):
     assert data["detail"] == "Unsupported file type"
 
 
-def test_ingest_response_structure(client: TestClient):
-    """Test that response contains expected fields."""
+def test_ingest_response_structure(client: TestClient, monkeypatch):
+    """Test that response contains expected fields (parsers mocked)."""
     file_content = b"Sample content"
     file = ("sample.pdf", io.BytesIO(file_content), "application/pdf")
+
+    monkeypatch.setattr("app.api.ingest.load_pdf", lambda b: "x" * len(b))
 
     response = client.post("/ingest", files={"file": file})
 
     assert response.status_code == 200
     data = response.json()
     assert "filename" in data
-    assert "content_type" in data
-    assert "size_bytes" in data
-    assert isinstance(data["size_bytes"], int)
+    assert "text_length" in data
+    assert isinstance(data["text_length"], int)
 
 
 def test_ingest_without_file_returns_error(client: TestClient):
@@ -81,14 +92,16 @@ def test_ingest_without_file_returns_error(client: TestClient):
     assert response.status_code == 422  # Unprocessable Entity
 
 
-def test_ingest_large_file(client: TestClient):
-    """Test ingestion of a larger file."""
+def test_ingest_large_file(client: TestClient, monkeypatch):
+    """Test ingestion of a larger file (parsers mocked)."""
     # Create a 1MB file
     file_content = b"x" * (1024 * 1024)
     file = ("large.pdf", io.BytesIO(file_content), "application/pdf")
+
+    monkeypatch.setattr("app.api.ingest.load_pdf", lambda b: "z" * len(b))
 
     response = client.post("/ingest", files={"file": file})
 
     assert response.status_code == 200
     data = response.json()
-    assert data["size_bytes"] == 1024 * 1024
+    assert data["text_length"] == 1024 * 1024
