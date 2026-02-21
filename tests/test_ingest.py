@@ -1,0 +1,94 @@
+import io
+import pytest
+from fastapi.testclient import TestClient
+
+
+def test_ingest_pdf_file_success(client: TestClient):
+    """Test successful PDF ingestion."""
+    pdf_content = b"%PDF-1.4\n%Mock PDF content"
+    file = ("test.pdf", io.BytesIO(pdf_content), "application/pdf")
+
+    response = client.post("/ingest", files={"file": file})
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["filename"] == "test.pdf"
+    assert data["content_type"] == "application/pdf"
+    assert data["size_bytes"] == len(pdf_content)
+
+
+def test_ingest_txt_file_success(client: TestClient):
+    """Test successful TXT ingestion."""
+    txt_content = b"This is a sample text file content."
+    file = ("test.txt", io.BytesIO(txt_content), "text/plain")
+
+    response = client.post("/ingest", files={"file": file})
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["filename"] == "test.txt"
+    assert data["content_type"] == "text/plain"
+    assert data["size_bytes"] == len(txt_content)
+
+
+def test_ingest_unsupported_content_type_returns_400(client: TestClient):
+    """Test that unsupported file type returns 400."""
+    file_content = b"This is an executable file"
+    file = ("test.exe", io.BytesIO(file_content), "application/x-msdownload")
+
+    response = client.post("/ingest", files={"file": file})
+
+    assert response.status_code == 400
+    data = response.json()
+    assert data["detail"] == "Unsupported file type"
+
+
+def test_ingest_docx_unsupported_returns_400(client: TestClient):
+    """Test that DOCX files are rejected."""
+    file_content = b"Mock DOCX content"
+    docx_content_type = (
+        "application/vnd.openxmlformats-officedocument."
+        "wordprocessingml.document"
+    )
+    file = ("test.docx", io.BytesIO(file_content), docx_content_type)
+
+    response = client.post("/ingest", files={"file": file})
+
+    assert response.status_code == 400
+    data = response.json()
+    assert data["detail"] == "Unsupported file type"
+
+
+def test_ingest_response_structure(client: TestClient):
+    """Test that response contains expected fields."""
+    file_content = b"Sample content"
+    file = ("sample.pdf", io.BytesIO(file_content), "application/pdf")
+
+    response = client.post("/ingest", files={"file": file})
+
+    assert response.status_code == 200
+    data = response.json()
+    assert "filename" in data
+    assert "content_type" in data
+    assert "size_bytes" in data
+    assert isinstance(data["size_bytes"], int)
+
+
+def test_ingest_without_file_returns_error(client: TestClient):
+    """Test that missing file parameter returns error."""
+    response = client.post("/ingest")
+
+    assert response.status_code == 422  # Unprocessable Entity
+
+
+def test_ingest_large_file(client: TestClient):
+    """Test ingestion of a larger file."""
+    # Create a 1MB file
+    file_content = b"x" * (1024 * 1024)
+    file = ("large.pdf", io.BytesIO(file_content), "application/pdf")
+
+    response = client.post("/ingest", files={"file": file})
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["size_bytes"] == 1024 * 1024
