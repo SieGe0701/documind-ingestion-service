@@ -2,6 +2,8 @@ import logging
 
 from fastapi import APIRouter, UploadFile, File, HTTPException
 
+from app.core.document_loader import load_pdf, load_txt
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
@@ -33,21 +35,27 @@ async def ingest_file(file: UploadFile = File(...)) -> dict:
             detail="Unsupported file type",
         )
 
-    # Read file bytes to get size
+    # Read file bytes to parse
     file_bytes = await file.read()
-    size_bytes = len(file_bytes)
+
+    # Parse based on content type
+    try:
+        if file.content_type == "application/pdf":
+            text = load_pdf(file_bytes)
+        else:
+            text = load_txt(file_bytes)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    text_length = len(text)
 
     logger.info(
         f"File uploaded: {file.filename}",
         extra={
             "filename": file.filename,
             "content_type": file.content_type,
-            "size_bytes": size_bytes,
+            "text_length": text_length,
         },
     )
 
-    return {
-        "filename": file.filename,
-        "content_type": file.content_type,
-        "size_bytes": size_bytes,
-    }
+    return {"filename": file.filename, "text_length": text_length}
