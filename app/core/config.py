@@ -1,17 +1,15 @@
 import logging
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     """Application configuration loaded from environment variables."""
 
+    model_config = SettingsConfigDict(env_file=".env", case_sensitive=True)
+
     SERVICE_NAME: str
     ENV: str = "dev"
     LOG_LEVEL: str = "INFO"
-
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
 
 
 def get_settings() -> Settings:
