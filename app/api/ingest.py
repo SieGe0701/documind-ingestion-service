@@ -3,6 +3,7 @@ import logging
 from fastapi import APIRouter, UploadFile, File, HTTPException
 
 from app.core.document_loader import load_pdf, load_txt
+from app.core.chunker import chunk_text
 
 logger = logging.getLogger(__name__)
 
@@ -49,13 +50,20 @@ async def ingest_file(file: UploadFile = File(...)) -> dict:
 
     text_length = len(text)
 
+    # Chunk the text (fixed-size, overlapping)
+    chunks = chunk_text(text)
+    num_chunks = len(chunks)
+
     logger.info(
         f"File uploaded: {file.filename}",
         extra={
             "filename": file.filename,
             "content_type": file.content_type,
             "text_length": text_length,
+            "num_chunks": num_chunks,
         },
     )
 
-    return {"filename": file.filename, "text_length": text_length}
+    preview = [c["text"] for c in chunks[:2]]
+
+    return {"num_chunks": num_chunks, "chunk_preview": preview}
