@@ -67,3 +67,6 @@ npm-debug.log
 # Local development
 *.pid
 .cache/
+
+# Models and database artifacts
+/data/
