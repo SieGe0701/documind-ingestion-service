@@ -1,12 +1,15 @@
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
+import os
 
 from fastapi import FastAPI
 
 from app.core.config import get_settings, configure_logging
 from app.api.ingest import router as ingest_router
 from app.core.embedding_model import load_embedding_model
-import os
+from app.storage.vector_store import FaissVectorStore
+from app.storage.metadata_store import SQLiteMetadataStore
 
 # Initialize settings
 settings = get_settings()
@@ -34,7 +37,29 @@ async def lifespan(app: FastAPI):
             raise
     else:
         app.state.embedding_model = None
+
+    if os.environ.get("DISABLE_STORAGE") != "1":
+        data_dir = Path(os.environ.get("DATA_DIR", "data"))
+        data_dir.mkdir(parents=True, exist_ok=True)
+        faiss_index_path = os.environ.get("FAISS_INDEX_PATH", str(data_dir / "faiss.index"))
+        sqlite_db_path = os.environ.get("SQLITE_DB_PATH", str(data_dir / "metadata.db"))
+
+        app.state.vector_store = FaissVectorStore(index_path=faiss_index_path)
+        app.state.metadata_store = SQLiteMetadataStore(db_path=sqlite_db_path)
+    else:
+        app.state.vector_store = None
+        app.state.metadata_store = None
+
     yield
+
+    # Persist/close stores on shutdown
+    try:
+        if getattr(app.state, "vector_store", None) is not None:
+            app.state.vector_store.close()
+    finally:
+        if getattr(app.state, "metadata_store", None) is not None:
+            app.state.metadata_store.close()
+
     # Shutdown
     logger.info(f"Shutting down {settings.SERVICE_NAME}")
 

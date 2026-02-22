@@ -1,4 +1,6 @@
 import logging
+from datetime import datetime, timezone
+from uuid import uuid4
 
 from fastapi import APIRouter, UploadFile, File, HTTPException, Request
 
@@ -48,8 +50,6 @@ async def ingest_file(request: Request, file: UploadFile = File(...)) -> dict:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
-    text_length = len(text)
-
     # Chunk the text (fixed-size, overlapping)
     chunks = chunk_text(text)
     num_chunks = len(chunks)
@@ -59,27 +59,50 @@ async def ingest_file(request: Request, file: UploadFile = File(...)) -> dict:
     if embedding_model is not None and num_chunks > 0:
         texts = [c["text"] for c in chunks]
         embeddings = embedding_model.embed_texts(texts)
-        embedding_dim = len(embeddings[0]) if embeddings else 0
-        embedding_model_name = getattr(embedding_model, "model_name", "")
+        embedding_model_name = getattr(embedding_model, "model_name", "unknown")
     else:
-        embedding_dim = 0
-        embedding_model_name = ""
+        embeddings = []
+        embedding_model_name = getattr(embedding_model, "model_name", "unknown") if embedding_model is not None else ""
+
+    if len(embeddings) != num_chunks:
+        raise HTTPException(status_code=500, detail="Embedding count mismatch")
+
+    document_id = str(uuid4())
+
+    vector_store = getattr(request.app.state, "vector_store", None)
+    metadata_store = getattr(request.app.state, "metadata_store", None)
+    if vector_store is None or metadata_store is None:
+        raise HTTPException(status_code=500, detail="Storage is not initialized")
+
+    vector_metadata = [
+        {"document_id": document_id, "chunk_id": chunk["chunk_id"]}
+        for chunk in chunks
+    ]
+
+    if embeddings:
+        vector_store.add_embeddings(embeddings, vector_metadata)
+
+    metadata_store.save_document(
+        document_id=document_id,
+        filename=file.filename or "unknown",
+        upload_timestamp=datetime.now(timezone.utc).isoformat(),
+        num_chunks=num_chunks,
+        embedding_model=embedding_model_name,
+    )
+    metadata_store.save_chunks(document_id=document_id, chunks=chunks)
 
     logger.info(
         f"File uploaded: {file.filename}",
         extra={
             "filename": file.filename,
             "content_type": file.content_type,
-            "text_length": text_length,
+            "document_id": document_id,
             "num_chunks": num_chunks,
         },
     )
 
-    preview = [c["text"] for c in chunks[:2]]
-
     return {
+        "document_id": document_id,
         "num_chunks": num_chunks,
-        "chunk_preview": preview,
-        "embedding_dim": embedding_dim,
         "embedding_model": embedding_model_name,
     }

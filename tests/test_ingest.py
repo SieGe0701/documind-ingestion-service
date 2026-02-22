@@ -1,4 +1,5 @@
 import io
+import uuid
 import pytest
 from fastapi.testclient import TestClient
 from app.core.chunker import chunk_text
@@ -19,10 +20,12 @@ def test_ingest_pdf_file_success(client: TestClient, monkeypatch):
 
     assert response.status_code == 200
     data = response.json()
+    assert "document_id" in data
     assert "num_chunks" in data
-    assert "chunk_preview" in data
+    assert "embedding_model" in data
+    uuid.UUID(data["document_id"])
     assert data["num_chunks"] == len(chunk_text(fake_load_pdf(pdf_content)))
-    assert data["chunk_preview"][0] == fake_load_pdf(pdf_content)[:500]
+    assert data["embedding_model"] == "dummy-test-model"
 
 
 def test_ingest_txt_file_success(client: TestClient, monkeypatch):
@@ -40,10 +43,12 @@ def test_ingest_txt_file_success(client: TestClient, monkeypatch):
 
     assert response.status_code == 200
     data = response.json()
+    assert "document_id" in data
     assert "num_chunks" in data
-    assert "chunk_preview" in data
+    assert "embedding_model" in data
+    uuid.UUID(data["document_id"])
     assert data["num_chunks"] == len(chunk_text(fake_load_txt(txt_content)))
-    assert data["chunk_preview"][0] == fake_load_txt(txt_content)[:500]
+    assert data["embedding_model"] == "dummy-test-model"
 
 
 def test_ingest_unsupported_content_type_returns_400(client: TestClient):
@@ -85,8 +90,10 @@ def test_ingest_response_structure(client: TestClient, monkeypatch):
 
     assert response.status_code == 200
     data = response.json()
+    assert "document_id" in data
     assert "num_chunks" in data
-    assert "chunk_preview" in data
+    assert "embedding_model" in data
+    uuid.UUID(data["document_id"])
     assert isinstance(data["num_chunks"], int)
 
 
