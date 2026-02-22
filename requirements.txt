@@ -6,3 +6,5 @@ python-multipart
 pytest==7.4.3
 httpx==0.25.1
 pypdf>=3.0.0
+sentence-transformers>=2.2.2
+numpy>=1.25.0
