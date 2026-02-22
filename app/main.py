@@ -10,6 +10,8 @@ from app.api.ingest import router as ingest_router
 from app.core.embedding_model import load_embedding_model
 from app.storage.vector_store import FaissVectorStore
 from app.storage.metadata_store import SQLiteMetadataStore
+from dotenv import load_dotenv
+load_dotenv()
 
 # Initialize settings
 settings = get_settings()

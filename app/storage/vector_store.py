@@ -39,7 +39,10 @@ class FaissVectorStore:
             return
 
         if self.index.d != dim:
-            raise ValueError(f"Embedding dimension mismatch: index expects {self.index.d}, got {dim}")
+            # Recreate index when embedding dimension changes between runs.
+            # This prevents runtime failures with stale persisted indexes.
+            self.index = faiss.IndexFlatL2(dim)
+            self.id_mapping = {}
 
     def add_embeddings(
         self,

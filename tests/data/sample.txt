@@ -1,0 +1,6 @@
+sample.txt
+-----------
+This is a test document.
+
+It contains multiple paragraphs.
+This should be chunked and embedded.

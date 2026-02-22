@@ -94,8 +94,8 @@ async def ingest_file(request: Request, file: UploadFile = File(...)) -> dict:
     logger.info(
         f"File uploaded: {file.filename}",
         extra={
-            "filename": file.filename,
-            "content_type": file.content_type,
+            "uploaded_filename": file.filename,
+            "uploaded_content_type": file.content_type,
             "document_id": document_id,
             "num_chunks": num_chunks,
         },
