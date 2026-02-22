@@ -27,11 +27,11 @@ async def lifespan(app: FastAPI):
         f"Starting {settings.SERVICE_NAME} in {settings.ENV} environment",
         extra={"service": settings.SERVICE_NAME, "env": settings.ENV},
     )
-    # Initialize embedding model once (unless disabled via env for tests)
+    # Initialize embedding wrapper once (model itself is lazy-loaded on first embedding request)
     if os.environ.get("DISABLE_EMBEDDINGS") != "1":
         try:
             app.state.embedding_model = load_embedding_model()
-            logger.info("Embedding model loaded", extra={"model": app.state.embedding_model.model_name})
+            logger.info("Embedding model initialized (lazy)", extra={"model": app.state.embedding_model.model_name})
         except Exception:
             logger.exception("Failed to initialize embedding model")
             raise
@@ -44,8 +44,13 @@ async def lifespan(app: FastAPI):
         faiss_index_path = os.environ.get("FAISS_INDEX_PATH", str(data_dir / "faiss.index"))
         sqlite_db_path = os.environ.get("SQLITE_DB_PATH", str(data_dir / "metadata.db"))
 
-        app.state.vector_store = FaissVectorStore(index_path=faiss_index_path)
-        app.state.metadata_store = SQLiteMetadataStore(db_path=sqlite_db_path)
+        try:
+            app.state.vector_store = FaissVectorStore(index_path=faiss_index_path)
+            app.state.metadata_store = SQLiteMetadataStore(db_path=sqlite_db_path)
+        except Exception:
+            logger.warning("Storage initialization skipped", exc_info=True)
+            app.state.vector_store = None
+            app.state.metadata_store = None
     else:
         app.state.vector_store = None
         app.state.metadata_store = None
