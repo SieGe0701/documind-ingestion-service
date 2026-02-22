@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException, Request
 
 from app.core.document_loader import load_pdf, load_txt
 from app.core.chunker import chunk_text
@@ -14,7 +14,7 @@ SUPPORTED_CONTENT_TYPES = {"application/pdf", "text/plain"}
 
 
 @router.post("/ingest")
-async def ingest_file(file: UploadFile = File(...)) -> dict:
+async def ingest_file(request: Request, file: UploadFile = File(...)) -> dict:
     """
     Upload and process a document file.
 
@@ -54,6 +54,17 @@ async def ingest_file(file: UploadFile = File(...)) -> dict:
     chunks = chunk_text(text)
     num_chunks = len(chunks)
 
+    # Embed chunks if embedding model is available
+    embedding_model = getattr(request.app.state, "embedding_model", None)
+    if embedding_model is not None and num_chunks > 0:
+        texts = [c["text"] for c in chunks]
+        embeddings = embedding_model.embed_texts(texts)
+        embedding_dim = len(embeddings[0]) if embeddings else 0
+        embedding_model_name = getattr(embedding_model, "model_name", "")
+    else:
+        embedding_dim = 0
+        embedding_model_name = ""
+
     logger.info(
         f"File uploaded: {file.filename}",
         extra={
@@ -66,4 +77,9 @@ async def ingest_file(file: UploadFile = File(...)) -> dict:
 
     preview = [c["text"] for c in chunks[:2]]
 
-    return {"num_chunks": num_chunks, "chunk_preview": preview}
+    return {
+        "num_chunks": num_chunks,
+        "chunk_preview": preview,
+        "embedding_dim": embedding_dim,
+        "embedding_model": embedding_model_name,
+    }
